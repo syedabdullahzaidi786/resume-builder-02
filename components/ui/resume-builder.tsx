@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Plus, Trash2, Upload } from "lucide-react"
+import { toPdf } from 'react-to-pdf'
 
 type ResumeData = {
   personalInfo: {
@@ -48,7 +49,10 @@ export default function ResumeBuilder() {
   const [resumeData, setResumeData] = useState<ResumeData>(initialResumeData)
   const [template, setTemplate] = useState<'modern' | 'classic' | 'minimalist'>('modern')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const resumeRef = useRef<HTMLDivElement>(null)
 
   const handlePersonalInfoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setResumeData({
@@ -116,24 +120,64 @@ export default function ResumeBuilder() {
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (validateForm()) {
-      console.log('Form submitted:', resumeData)
-      // Here you would typically send the data to a server or generate a PDF
+      setIsGenerating(true)
+      setGenerationError(null)
+      try {
+        const pdfOptions = {
+          filename: `${resumeData.personalInfo.name.replace(/\s+/g, '_')}_resume.pdf`,
+          page: {
+            format: 'A4',
+            orientation: 'portrait',
+            margin: 20,
+          },
+          overrides: {
+            pdf: {
+              compress: true
+            },
+            canvas: {
+              useCORS: true
+            }
+          },
+          html2canvas: {
+            scale: 2,
+            logging: true,
+            windowWidth: 1024,
+          },
+        }
+        await toPdf(resumeRef, pdfOptions)
+      } catch (error) {
+        console.error('Error generating PDF:', error)
+        setGenerationError('An error occurred while generating the PDF. Please try again.')
+      } finally {
+        setIsGenerating(false)
+      }
     }
   }
 
   const renderPreview = () => {
+    const commonStyles = {
+      width: '210mm',
+      minHeight: '297mm',
+      padding: '20mm',
+      margin: '0 auto',
+      boxSizing: 'border-box' as const,
+      fontSize: '12pt',
+      lineHeight: '1.5',
+      backgroundColor: 'white',
+    };
+
     switch (template) {
       case 'modern':
         return (
-          <div className="bg-gray-100 p-6 rounded-lg">
-            <div className="flex items-center mb-6">
+          <div style={commonStyles}>
+            <div className="flex flex-col sm:flex-row items-center mb-6">
               {resumeData.profilePicture && (
-                <img src={resumeData.profilePicture} alt="Profile" className="w-24 h-24 rounded-full mr-4 object-cover" />
+                <img src={resumeData.profilePicture} alt="Profile" className="w-24 h-24 rounded-full mb-4 sm:mb-0 sm:mr-4 object-cover" />
               )}
-              <div>
+              <div className="text-center sm:text-left">
                 <h2 className="text-2xl font-bold text-blue-600">{resumeData.personalInfo.name}</h2>
                 <p className="text-gray-600">{resumeData.personalInfo.email} | {resumeData.personalInfo.phone}</p>
                 <p className="text-gray-600">{resumeData.personalInfo.address}</p>
@@ -166,7 +210,7 @@ export default function ResumeBuilder() {
         )
       case 'classic':
         return (
-          <div className="bg-white p-6 border border-gray-300 rounded">
+          <div style={commonStyles}>
             <div className="text-center mb-6">
               {resumeData.profilePicture && (
                 <img src={resumeData.profilePicture} alt="Profile" className="w-32 h-32 rounded-full mx-auto mb-4 object-cover" />
@@ -202,13 +246,13 @@ export default function ResumeBuilder() {
         )
       case 'minimalist':
         return (
-          <div className="bg-white p-6">
+          <div style={commonStyles}>
             <h2 className="text-2xl font-light mb-2">{resumeData.personalInfo.name}</h2>
-            <div className="flex items-center mb-6">
+            <div className="flex flex-col sm:flex-row items-center mb-6">
               {resumeData.profilePicture && (
-                <img src={resumeData.profilePicture} alt="Profile" className="w-16 h-16 rounded-full mr-4 object-cover" />
+                <img src={resumeData.profilePicture} alt="Profile" className="w-16 h-16 rounded-full mb-4 sm:mb-0 sm:mr-4 object-cover" />
               )}
-              <div>
+              <div className="text-center sm:text-left">
                 <p className="text-sm">{resumeData.personalInfo.email}</p>
                 <p className="text-sm">{resumeData.personalInfo.phone}</p>
                 <p className="text-sm">{resumeData.personalInfo.address}</p>
@@ -245,54 +289,56 @@ export default function ResumeBuilder() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-4xl font-bold mb-4 text-center text-blue-500">
-  Resume Builder
-</h1>
-<h2 className="text-center text-pretty text-blue-400 text-1xl font-semibold font-serif">Created By: SAZ</h2>
+        Resume Builder
+      </h1>
+      <h2 className="text-center text-pretty text-blue-400 text-1xl font-semibold font-serif">Created By: SAZ</h2>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="space-y-4">
+      <form onSubmit={handleSubmit} className="mt-8">
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Personal Information</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" name="name" value={resumeData.personalInfo.name} onChange={handlePersonalInfoChange} className={errors.name ? 'border-red-500' : ''} />
-                  {errors.name && <p className="text-red-500 text-sm">{errors.name}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" value={resumeData.personalInfo.email} onChange={handlePersonalInfoChange} className={errors.email ? 'border-red-500' : ''} />
-                  {errors.email && <p className="text-red-500 text-sm">{errors.email}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" name="phone" type="tel" value={resumeData.personalInfo.phone} onChange={handlePersonalInfoChange} className={errors.phone ? 'border-red-500' : ''} />
-                  {errors.phone && <p className="text-red-500 text-sm">{errors.phone}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Input id="address" name="address" value={resumeData.personalInfo.address} onChange={handlePersonalInfoChange} />
-                </div>
-                <div className="space-y-2 mt-4">
-                  <Label htmlFor="profile-picture">Profile Picture</Label>
-                  <div className="flex items-center space-x-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Upload
-                    </Button>
-                    {resumeData.profilePicture && <p className="text-sm text-gray-500">Image uploaded</p>}
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Name</Label>
+                    <Input id="name" name="name" value={resumeData.personalInfo.name} onChange={handlePersonalInfoChange} className={errors.name ? 'border-red-500' : ''} />
+                    {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
                   </div>
-                  <input
-                    type="file"
-                    id="profile-picture"
-                    ref={fileInputRef}
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleProfilePictureUpload}
-                  />
+                  <div>
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" name="email" type="email" value={resumeData.personalInfo.email} onChange={handlePersonalInfoChange} className={errors.email ? 'border-red-500' : ''} />
+                    {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input id="phone" name="phone" type="tel" value={resumeData.personalInfo.phone} onChange={handlePersonalInfoChange} className={errors.phone  ? 'border-red-500' : ''} />
+                    {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
+                  </div>
+                  <div>
+                    <Label htmlFor="address">Address</Label>
+                    <Input id="address" name="address" value={resumeData.personalInfo.address} onChange={handlePersonalInfoChange} />
+                  </div>
+                  <div>
+                    <Label htmlFor="profile-picture">Profile Picture</Label>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload
+                      </Button>
+                      {resumeData.profilePicture && <p className="text-sm text-gray-500">Image uploaded</p>}
+                    </div>
+                    <input
+                      type="file"
+                      id="profile-picture"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleProfilePictureUpload}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -303,11 +349,10 @@ export default function ResumeBuilder() {
               </CardHeader>
               <CardContent>
                 {resumeData.workExperience.map((exp, index) => (
-                  <div key={index} className="mb-4 p-2 border rounded">
+                  <div key={index} className="mb-4 p-4 border rounded">
                     <Input placeholder="Company" name="company" value={exp.company} onChange={(e) => handleWorkExperienceChange(index, e)} className="mb-2" />
                     <Input placeholder="Position" name="position" value={exp.position} onChange={(e) => handleWorkExperienceChange(index, e)} className="mb-2" />
                     <Input placeholder="Duration" name="duration" value={exp.duration} onChange={(e) => handleWorkExperienceChange(index, e)} className="mb-2" />
-                    
                     <Textarea placeholder="Description" name="description" value={exp.description} onChange={(e) => handleWorkExperienceChange(index, e)} className="mb-2" />
                     <Button type="button" variant="destructive" size="sm" onClick={() => removeWorkExperience(index)}><Trash2 className="mr-2 h-4 w-4" />Remove</Button>
                   </div>
@@ -322,7 +367,7 @@ export default function ResumeBuilder() {
               </CardHeader>
               <CardContent>
                 {resumeData.education.map((edu, index) => (
-                  <div key={index} className="mb-4 p-2 border rounded">
+                  <div key={index} className="mb-4 p-4 border rounded">
                     <Input placeholder="Institution" name="institution" value={edu.institution} onChange={(e) => handleEducationChange(index, e)} className="mb-2" />
                     <Input placeholder="Degree" name="degree" value={edu.degree} onChange={(e) => handleEducationChange(index, e)} className="mb-2" />
                     <Input placeholder="Year" name="year" value={edu.year} onChange={(e) => handleEducationChange(index, e)} className="mb-2" />
@@ -360,16 +405,21 @@ export default function ResumeBuilder() {
               </CardContent>
             </Card>
 
-            <Button type="submit" className="w-full">Generate Resume</Button>
+            <Button type="submit" className="w-full" disabled={isGenerating}>
+              {isGenerating ? 'Generating PDF...' : 'Generate Resume'}
+            </Button>
+            {generationError && <p className="text-red-500 text-sm mt-2">{generationError}</p>}
           </div>
 
-          <div>
+          <div className="mt-8 md:mt-0">
             <Card>
               <CardHeader>
                 <CardTitle>Resume Preview</CardTitle>
               </CardHeader>
               <CardContent>
-                {renderPreview()}
+                <div ref={resumeRef} className="overflow-hidden bg-white">
+                  {renderPreview()}
+                </div>
               </CardContent>
             </Card>
           </div>
